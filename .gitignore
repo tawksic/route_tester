@@ -1,0 +1,24 @@
+# Compiled files
+/target/
+**/*.rs.bk
+
+# Cargo lock file (optional - some include it, some don't)
+# Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secret files
+.secrets.yaml
+*.pem
+*.key
+
+# Peronsal Notes
+notes

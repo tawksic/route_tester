@@ -1,0 +1,10 @@
+[package]
+name = "route_tester"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+base64 = "0.21"
+hmac = "0.12"
+sha2 = "0.10"
+pbkdf2 = "0.12"
