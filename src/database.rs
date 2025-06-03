@@ -1,15 +1,15 @@
-use std::net::TcpStream;
-use std::io::{BufRead, Write};
 use std::ffi::CString;
+use std::io::{BufRead, Write};
+use std::net::TcpStream;
 
 // From crates - I cheated because encryption is insane
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as base64_std;
 use hmac::Hmac;
 use hmac::Mac;
+use pbkdf2::pbkdf2;
 use sha2::Digest;
 use sha2::Sha256;
-use pbkdf2::pbkdf2;
-use base64::engine::general_purpose::STANDARD as base64_std;
-use base64::Engine;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -20,7 +20,7 @@ pub enum AuthState {
     SASLContinue(String),
     SASLFinal,
     Authenticated,
-    Error(String)
+    Error(String),
 }
 
 struct StartupMessage {
@@ -30,7 +30,7 @@ struct StartupMessage {
     user_val: CString,
     database_key: CString,
     database_val: CString,
-    end: u8
+    end: u8,
 }
 
 struct SASLInitialResponse {
@@ -38,17 +38,16 @@ struct SASLInitialResponse {
     msg_len: u32,
     auth_mech: CString,
     auth_len: u32,
-    client_first_msg: Vec<u8>
+    client_first_msg: Vec<u8>,
 }
 
 struct Query {
     resp_type: u8,
     msg_len: u32,
-    query: CString
+    query: CString,
 }
 
 fn wire(message: &[u8], stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
-
     stream.write_all(message)?;
     stream.flush()?;
 
@@ -59,15 +58,15 @@ fn wire(message: &[u8], stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
     Ok(received)
 }
 
-fn create_start_message() ->  StartupMessage {
+fn create_start_message() -> StartupMessage {
     let user_key = CString::new("user").unwrap();
-    let db_user = crate::utils::get_secret_string("db_user")
-        .expect("Failed to get db_user from secrets");
+    let db_user =
+        crate::utils::get_secret_string("db_user").expect("Failed to get db_user from secrets");
     let user_val = CString::new(db_user).unwrap();
 
     let database_key = CString::new("database").unwrap();
-    let db_name = crate::utils::get_secret_string("db_name")
-        .expect("Failed to get db_name from secrets");
+    let db_name =
+        crate::utils::get_secret_string("db_name").expect("Failed to get db_name from secrets");
     let database_val = CString::new(db_name).unwrap();
 
     // Calculate the total message length
@@ -78,7 +77,6 @@ fn create_start_message() ->  StartupMessage {
                 + database_key.as_bytes_with_nul().to_vec().len()
                 + database_val.as_bytes_with_nul().to_vec().len()
                 + 1; // end
-
 
     let start_message = StartupMessage {
         msg_len: msg_len as u32,
@@ -109,8 +107,8 @@ fn encode_start_msg(start_message: &StartupMessage) -> Vec<u8> {
 fn create_sasl_initial_response() -> SASLInitialResponse {
     // Create client_first_msg
     let nonce = crate::utils::rand();
-    let db_user = crate::utils::get_secret_string("db_user")
-        .expect("Failed to get db_user from secrets");
+    let db_user =
+        crate::utils::get_secret_string("db_user").expect("Failed to get db_user from secrets");
     let client_first_msg = format!("n,,n={},r={}", db_user, nonce);
     let client_first_msg_bytes = client_first_msg.as_bytes().to_vec();
     let auth_len = client_first_msg_bytes.len() as u32;
@@ -123,7 +121,7 @@ fn create_sasl_initial_response() -> SASLInitialResponse {
     let msg_len = 4                      // msg_len
                 + auth_mech_bytes.len()  // auth_mech
                 + 4                      // auth_len
-                + auth_len as usize;     // client_first_msg
+                + auth_len as usize; // client_first_msg
 
     let sasl_initial_response = SASLInitialResponse {
         resp_type: b'p',
@@ -158,7 +156,10 @@ fn encode_sasl_initial_response(resp: &SASLInitialResponse) -> Vec<u8> {
 }
 
 fn create_query(arg_query: &String) -> Query {
-    let formated_query = format!("SELECT short_edge, subnet FROM routes WHERE short_edge = '{}';", arg_query);
+    let formated_query = format!(
+        "SELECT short_edge, subnet FROM routes WHERE short_edge = '{}';",
+        arg_query
+    );
     let query = CString::new(formated_query).expect("Failed to create CString");
     let msg_len = 4 + query.as_bytes_with_nul().len();
 
@@ -217,17 +218,21 @@ fn client_signature(stored_key: &[u8], auth_message: &[u8]) -> [u8; 32] {
 }
 
 fn client_proof(client_key: &[u8], client_signature: &[u8]) -> Vec<u8> {
-    client_key.iter()
+    client_key
+        .iter()
         .zip(client_signature)
         .map(|(a, b)| a ^ b)
         .collect()
 }
 
-fn calculate_sasl_final(server_first_msg: &str, sasl_initial_response: &SASLInitialResponse) -> String {
+fn calculate_sasl_final(
+    server_first_msg: &str,
+    sasl_initial_response: &SASLInitialResponse,
+) -> String {
     // Variables to store SCRAM values sent by server
-    let mut nonce = "";       // r=<nonce>
-    let mut salt = "";        // s=<base64-salt>
-    let mut iterations = 0;   // i=<iteration-count>
+    let mut nonce = ""; // r=<nonce>
+    let mut salt = ""; // s=<base64-salt>
+    let mut iterations = 0; // i=<iteration-count>
 
     // Split the server message into fields and extract relevant SCRAM parts
     for part in server_first_msg.split(',') {
@@ -241,17 +246,21 @@ fn calculate_sasl_final(server_first_msg: &str, sasl_initial_response: &SASLInit
     }
 
     // Reconstruct the client-first-message-bare (everything after "n,,")
-    let client_first_bare = std::str::from_utf8(&sasl_initial_response.client_first_msg[3..]).unwrap();
+    let client_first_bare =
+        std::str::from_utf8(&sasl_initial_response.client_first_msg[3..]).unwrap();
 
     // Construct the client-final-message (without proof yet)
     let client_final_wo_proof = format!("c=biws,r={}", nonce);
 
     // The auth_message is a concatenation of three parts:
-    let auth_message = format!("{},{},{}", client_first_bare, server_first_msg, client_final_wo_proof);
+    let auth_message = format!(
+        "{},{},{}",
+        client_first_bare, server_first_msg, client_final_wo_proof
+    );
 
     // Derive SCRAM secrets
-    let db_pass = crate::utils::get_secret_string("db_pass")
-        .expect("Failed to get db_pass from secrets");
+    let db_pass =
+        crate::utils::get_secret_string("db_pass").expect("Failed to get db_pass from secrets");
     let salted = salted_password(&db_pass, salt, iterations);
     let ck = client_key(&salted);
     let sk = stored_key(&ck);
@@ -270,7 +279,7 @@ fn get_err_msg(message: &[u8]) -> String {
     for element in msg_iter {
         // M stands for Message in Postgres ErrorResponse messages
         if !element.is_empty() && element[0] == b'M' {
-            return std::str::from_utf8(&element[1..]).unwrap().to_string()
+            return std::str::from_utf8(&element[1..]).unwrap().to_string();
             // return error_msg
         }
     }
@@ -294,28 +303,35 @@ fn parse_auth_response(message: &[u8], current_state: &AuthState) -> AuthState {
     }
 
     if resp_type != b'R' {
-        return AuthState::Error(format!("Expected auth response (R), got: {}", resp_type as char));
+        return AuthState::Error(format!(
+            "Expected auth response (R), got: {}",
+            resp_type as char
+        ));
     }
 
     // Auth code is at bytes 5-8
-    let auth_code = u32::from_be_bytes([
-        message[5], message[6], message[7], message[8]
-    ]);
+    let auth_code = u32::from_be_bytes([message[5], message[6], message[7], message[8]]);
 
     match (current_state, auth_code) {
         (AuthState::Initial, 10) => AuthState::SASLStarted,
         (AuthState::SASLStarted, 11) => {
-            let msg_len = u32::from_be_bytes([message[1], message[2], message[3], message[4]]) as usize;
+            let msg_len =
+                u32::from_be_bytes([message[1], message[2], message[3], message[4]]) as usize;
             let server_first_msg_bytes = &message[9..(1 + msg_len)];
             let server_first_msg = match std::str::from_utf8(server_first_msg_bytes) {
                 Ok(msg) => msg.to_string(),
-                Err(e) => return AuthState::Error(format!("Invalid UTF-8 in server message: {}", e)),
+                Err(e) => {
+                    return AuthState::Error(format!("Invalid UTF-8 in server message: {}", e));
+                }
             };
             AuthState::SASLContinue(server_first_msg)
-        },
+        }
         (AuthState::SASLContinue(_), 12) => AuthState::SASLFinal,
         (AuthState::SASLContinue(_), 0) | (AuthState::SASLFinal, 0) => AuthState::Authenticated,
-        _ => AuthState::Error(format!("Unexpected auth code {} in state {:?}", auth_code, current_state))
+        _ => AuthState::Error(format!(
+            "Unexpected auth code {} in state {:?}",
+            auth_code, current_state
+        )),
     }
 }
 
@@ -332,7 +348,10 @@ fn fetch_rows(message: &Vec<u8>) -> Vec<(String, String)> {
         }
 
         let msg_len = u32::from_be_bytes([
-            message[i + 1], message[i + 2], message[i + 3], message[i + 4],
+            message[i + 1],
+            message[i + 2],
+            message[i + 3],
+            message[i + 4],
         ]) as usize;
 
         if i + 1 + msg_len > message.len() {
@@ -341,10 +360,7 @@ fn fetch_rows(message: &Vec<u8>) -> Vec<(String, String)> {
 
         if msg_type == b'D' {
             // number of columns (2 bytes)
-            let field_count = u16::from_be_bytes([
-                message[i + 5],
-                message[i + 6],
-            ]) as usize;
+            let field_count = u16::from_be_bytes([message[i + 5], message[i + 6]]) as usize;
 
             let mut fields: Vec<String> = Vec::with_capacity(field_count);
             // skip type field (1), msg len (4), num of cols (2) = 7
@@ -378,8 +394,6 @@ fn fetch_rows(message: &Vec<u8>) -> Vec<(String, String)> {
     responses
 }
 
-
-
 pub fn connect_db(auth_state: &mut AuthState, mut stream: &mut TcpStream) -> std::io::Result<()> {
     // Step 1: StartupMessage
     let start_message = create_start_message();
@@ -396,7 +410,8 @@ pub fn connect_db(auth_state: &mut AuthState, mut stream: &mut TcpStream) -> std
 
         // Step 3: SASL Continue Response
         if let AuthState::SASLContinue(ref server_first_msg) = auth_state {
-            let sasl_final_response = calculate_sasl_final(server_first_msg, &sasl_initial_response);
+            let sasl_final_response =
+                calculate_sasl_final(server_first_msg, &sasl_initial_response);
             let enc_sasl_final_response = encode_sasl_response(&sasl_final_response);
             let recv_final_response = wire(&enc_sasl_final_response, &mut stream)?;
 
@@ -430,7 +445,10 @@ pub fn connect_db(auth_state: &mut AuthState, mut stream: &mut TcpStream) -> std
     Ok(())
 }
 
-pub fn query_db(arg_query: &String, stream: &mut TcpStream) -> std::io::Result<Vec<(String, String)>> {
+pub fn query_db(
+    arg_query: &String,
+    stream: &mut TcpStream,
+) -> std::io::Result<Vec<(String, String)>> {
     let query = create_query(arg_query);
     let enc_query = encode_query(&query);
     let recv_enc_query = wire(&enc_query, stream)?;

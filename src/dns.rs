@@ -86,7 +86,7 @@ pub fn encode_dq_name(dns_question: &DnsQuestion) -> Vec<u8> {
     for iter in name_iter {
         buf.push(iter.len() as u8);
         buf.extend_from_slice(iter.as_bytes());
-    };
+    }
     buf.push(0);
 
     buf
@@ -136,7 +136,11 @@ pub fn encode_ecs_option(opt_record: &OptRecord) -> Vec<u8> {
     buf
 }
 
-pub fn wire(enc_dh: &Vec<u8>, enc_dq: &Vec<u8>, enc_edns: &Vec<u8>) -> Result<Vec<u8>, std::io::Error> {
+pub fn wire(
+    enc_dh: &Vec<u8>,
+    enc_dq: &Vec<u8>,
+    enc_edns: &Vec<u8>,
+) -> Result<Vec<u8>, std::io::Error> {
     let mut send_buf: Vec<u8> = Vec::new();
     send_buf.extend_from_slice(&enc_dh);
     send_buf.extend_from_slice(&enc_dq);
@@ -145,8 +149,8 @@ pub fn wire(enc_dh: &Vec<u8>, enc_dq: &Vec<u8>, enc_edns: &Vec<u8>) -> Result<Ve
     let udp_socket = UdpSocket::bind("0.0.0.0:0")?;
     udp_socket.set_read_timeout(Some(Duration::from_secs(5)))?;
 
-    let net_rslvr = crate::utils::get_secret_string("net_rslvr")
-        .expect("Failed to get net_rslvr from secrets");
+    let net_rslvr =
+        crate::utils::get_secret_string("net_rslvr").expect("Failed to get net_rslvr from secrets");
     let net_rslvr_port = crate::utils::get_secret_int("net_rslvr_port")
         .expect("Failed to get net_rslvr_port from secrets");
 
@@ -193,7 +197,8 @@ pub fn parse_flags(pkt_recvd: &[u8], dns_header: &DnsHeader) -> Vec<String> {
         flags.push("RESP".to_string());
     }
 
-    let opcode = (prsd_flgs_as_u16 & crate::dns_consts::OPCODE_MASK) >> crate::dns_consts::OPCODE_SHIFT;
+    let opcode =
+        (prsd_flgs_as_u16 & crate::dns_consts::OPCODE_MASK) >> crate::dns_consts::OPCODE_SHIFT;
     if opcode == 0 {
         flags.push("SQ".to_string());
     }
@@ -272,7 +277,7 @@ pub fn parse_flags(pkt_recvd: &[u8], dns_header: &DnsHeader) -> Vec<String> {
                 pkt_recvd[offset + 4],
                 pkt_recvd[offset + 5],
                 pkt_recvd[offset + 6],
-                pkt_recvd[offset + 7]
+                pkt_recvd[offset + 7],
             ];
             let ttl = u32::from_be_bytes(ttl_bytes);
             flags.push(format!("TTL={}", ttl));

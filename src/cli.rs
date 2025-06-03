@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use std::env;
 use std::net::Ipv4Addr;
-use std::collections::HashMap;
 
 pub fn print_usage() {
     println!("Usage: route_tester <short_edge> [OPTIONS]");
@@ -102,7 +102,11 @@ pub fn is_ip_in_subnet(ip: Ipv4Addr, subnet: &str) -> bool {
     (ip_u32 & mask) == (subnet_u32 & mask)
 }
 
-pub fn find_short_edge_for_ip(ip: Ipv4Addr, ip_to_edge_map: &HashMap<Ipv4Addr, String>, subnet_to_edge_map: &HashMap<String, String>) -> Option<String> {
+pub fn find_short_edge_for_ip(
+    ip: Ipv4Addr,
+    ip_to_edge_map: &HashMap<Ipv4Addr, String>,
+    subnet_to_edge_map: &HashMap<String, String>,
+) -> Option<String> {
     // First check direct IP mapping
     if let Some(edge) = ip_to_edge_map.get(&ip) {
         return Some(edge.clone());
@@ -121,17 +125,33 @@ pub fn find_short_edge_for_ip(ip: Ipv4Addr, ip_to_edge_map: &HashMap<Ipv4Addr, S
 pub fn display_results(results: &[(String, Ipv4Addr, Option<String>, Vec<String>)], verbose: bool) {
     println!("--- Results ---");
     println!("----------------------------------------------");
-    let max_subnet_len = results.iter().map(|(s, _, _, _)| s.len()).max().unwrap_or(0);
+    let max_subnet_len = results
+        .iter()
+        .map(|(s, _, _, _)| s.len())
+        .max()
+        .unwrap_or(0);
 
     if verbose {
-        println!(" {:<max_subnet_len$} - {:<15} - {:<15} - {}", "Tested Subnet", "Result IP", "Result Edge", "Flags");
+        println!(
+            " {:<max_subnet_len$} - {:<15} - {:<15} - {}",
+            "Tested Subnet", "Result IP", "Result Edge", "Flags"
+        );
 
         for (subnet, ip, edge, flags) in results {
             let edge_str = edge.as_deref().unwrap_or("UNKNOWN");
-            println!(" {:<max_subnet_len$} - {:<15} - {:<15} - {}", subnet, ip, edge_str, flags.join(", "));
+            println!(
+                " {:<max_subnet_len$} - {:<15} - {:<15} - {}",
+                subnet,
+                ip,
+                edge_str,
+                flags.join(", ")
+            );
         }
     } else {
-        println!(" {:<max_subnet_len$} - {:<15} - {}", "Tested Subnet", "Result IP", "Result Edge");
+        println!(
+            " {:<max_subnet_len$} - {:<15} - {}",
+            "Tested Subnet", "Result IP", "Result Edge"
+        );
 
         for (subnet, ip, edge, _) in results {
             let edge_str = edge.as_deref().unwrap_or("UNKNOWN");

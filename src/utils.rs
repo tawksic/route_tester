@@ -1,7 +1,7 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::net::Ipv4Addr;
-use std::io::ErrorKind;
 use std::fs;
+use std::io::ErrorKind;
+use std::net::Ipv4Addr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub enum SecretValue {
     Str(String),
@@ -11,8 +11,12 @@ pub enum SecretValue {
 
 fn read_secrets_file() -> Result<String, Box<dyn std::error::Error>> {
     fs::read_to_string(".secrets.yaml").map_err(|e| match e.kind() {
-        ErrorKind::NotFound => Box::<dyn std::error::Error>::from("Configuration file '.secrets.yaml' not found"),
-        ErrorKind::PermissionDenied => Box::<dyn std::error::Error>::from("Permission denied reading '.secrets.yaml'"),
+        ErrorKind::NotFound => {
+            Box::<dyn std::error::Error>::from("Configuration file '.secrets.yaml' not found")
+        }
+        ErrorKind::PermissionDenied => {
+            Box::<dyn std::error::Error>::from("Permission denied reading '.secrets.yaml'")
+        }
         _ => Box::<dyn std::error::Error>::from(format!("Failed to read '.secrets.yaml': {}", e)),
     })
 }
@@ -31,7 +35,10 @@ fn find_key_value(content: &str, key: &str) -> Result<String, Box<dyn std::error
         }
     }
 
-    Err(Box::<dyn std::error::Error>::from(format!("Key '{}' not found in .secrets.yaml", key)))
+    Err(Box::<dyn std::error::Error>::from(format!(
+        "Key '{}' not found in .secrets.yaml",
+        key
+    )))
 }
 
 pub fn get_secret_string(key: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -44,7 +51,10 @@ pub fn get_secret_ip(key: &str) -> Result<Ipv4Addr, Box<dyn std::error::Error>> 
     let value = find_key_value(&content, key)?;
 
     value.parse::<Ipv4Addr>().map_err(|_| {
-        Box::<dyn std::error::Error>::from(format!("Key '{}' value '{}' is not a valid IP address", key, value))
+        Box::<dyn std::error::Error>::from(format!(
+            "Key '{}' value '{}' is not a valid IP address",
+            key, value
+        ))
     })
 }
 
@@ -53,7 +63,10 @@ pub fn get_secret_int(key: &str) -> Result<i32, Box<dyn std::error::Error>> {
     let value = find_key_value(&content, key)?;
 
     value.parse::<i32>().map_err(|_| {
-        Box::<dyn std::error::Error>::from(format!("Key '{}' value '{}' is not a valid integer", key, value))
+        Box::<dyn std::error::Error>::from(format!(
+            "Key '{}' value '{}' is not a valid integer",
+            key, value
+        ))
     })
 }
 

@@ -1,18 +1,18 @@
-use std::net::TcpStream;
-use std::net::Ipv4Addr;
 use std::collections::HashMap;
+use std::net::Ipv4Addr;
+use std::net::TcpStream;
 
+use route_tester::cli;
 use route_tester::database;
 use route_tester::dns;
-use route_tester::cli;
 
 fn main() -> std::io::Result<()> {
     let (arg_query, verbose) = cli::get_args();
 
-    let db_ip = route_tester::utils::get_secret_ip("db_ip")
-        .expect("Failed to get db_ip from secrets");
-    let db_port = route_tester::utils::get_secret_int("db_port")
-        .expect("Failed to get db_port from secrets");
+    let db_ip =
+        route_tester::utils::get_secret_ip("db_ip").expect("Failed to get db_ip from secrets");
+    let db_port =
+        route_tester::utils::get_secret_int("db_port").expect("Failed to get db_port from secrets");
 
     let db_addr = format!("{}:{}", db_ip, db_port);
     let mut stream = TcpStream::connect(&db_addr)?;
@@ -34,7 +34,6 @@ fn main() -> std::io::Result<()> {
 
         if let Ok(ip) = subnet.parse::<Ipv4Addr>() {
             ip_to_edge_map.insert(ip, short_edge.clone());
-
         }
     }
 
@@ -69,7 +68,8 @@ fn main() -> std::io::Result<()> {
 
         // Skipping domain header + domain question (len) + 4 bytes for RDATA len.. to get to the RDATA (answer)
         if skip_to_ans + 4 <= pkt_recvd.len() {
-            let prsd_rdata_ip: [u8; 4] = pkt_recvd[skip_to_ans..skip_to_ans + 4].try_into().unwrap();
+            let prsd_rdata_ip: [u8; 4] =
+                pkt_recvd[skip_to_ans..skip_to_ans + 4].try_into().unwrap();
             let ip = Ipv4Addr::from(prsd_rdata_ip);
 
             // Find the corresponding short_edge for this IP
